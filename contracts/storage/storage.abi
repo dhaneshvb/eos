@@ -5,20 +5,21 @@
         }
     ],
     "structs": [{
-        "name": "Transfer",
+        "name": "Capacity",
         "base": "",
         "fields": {
-            "from": "AccountName",
-            "to": "AccountName",
-            "amount": "UInt64"
-        } 
+            "owner" : "AccountName",
+            "supply" : "UInt64",
+            "reserve" : "UInt64"
+        }
     },{
-        "name": "Account",
+        "name": "Allocation",
         "base": "",
         "fields": {
             "account": "AccountName",
-            "tokbalance": "UInt64",
-            "quotausage": "UInt64"
+            "percentAllocated": "UInt64",
+            "usedBytes": "UInt64",
+            "totalPaid": "UInt64"
         }
     },{ 
         "name": "Link",
@@ -27,43 +28,76 @@
             "owner"  : "AccountName",
             "eospath" : "String",
             "ipfspath" : "String",
-            "size"  : "UInt32",
-            "store" : "UInt8",
-            "accept": "UInt8",
-            "stake" : "UInt64",
+            "size"  : "UInt64",
+            "requestHosting" : "UInt8",
+            "accepted": "UInt8",
             "producer": "AccountName"
+        }
+    },{
+        "name": "RemoveLink",
+        "base": "",
+        "fields": {
+           "owner" : "AccountName",
+           "eospath" : "String",
+           "keep_link" : "UInt8"
+        }
+    },{
+        "name": "Store",
+        "base": "",
+        "fields": {
+             "producer" : "AccountName",
+             "owner" : "AccountName",
+             "eospath" : "String"
+        }
+    },{
+         "name": "Reject",
+         "base": "",
+         "fields": {
+             "producer" : "AccountName",
+             "owner" : "AccountName",
+             "eospath" : "String",
+             "reason" : "String"
         }
     }
   ],
     "actions": [{
-         "action": "transfer",
-         "type": "Transfer"
-    },{
          "action": "setlink",
          "type": "Link"
     },{
          "action": "removelink",
-         "type": "String"
+         "type": "RemoveLink"
     },{
          "action": "acceptstore",
-         "type": "String"
+         "type": "Store"
     },{
          "action": "rejectstore",
-         "type": "String"
+         "type": "Store"
     }
   ],
-    "tables": [{
-         "table": "account",
-         "type": "account",
-         "indextype": "i64",
-         "keynames" : ["account"],
-         "keytypes" : ["AccountName"]
+  "tables": [{
+      "table": "allocations",
+      "type": "Allocation",
+      "indextype": "i64",
+      "keynames" : ["account"],
+      "keytypes" : ["AccountName"]
     },{
-         "table": "links",
-         "type" : "Link",
-         "indextype": "str",
-         "keynames" : ["eospath"]
-         "keytypes" : ["String"]
+      "table": "links",
+      "type": "Link",
+      "indextype": "str",
+      "keynames" : ["eospath"],
+      "keytypes" : ["String"]
+    },{
+      "table": "capacity",
+      "type": "Capacity",
+      "indextype": "i64",
+      "keynames": ["owner"],
+      "keytypes": ["AccountName"]
+    },{
+      "table": "rejections",
+      "type": "Reject",
+      "indextype": "str",
+      "keynames" : ["eospath"],
+      "keytypes" : ["String"]
     }
   ]
 }

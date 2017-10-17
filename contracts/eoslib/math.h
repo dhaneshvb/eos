@@ -63,7 +63,7 @@ extern "C" {
    * @endcode
    */
   uint64_t double_add(uint64_t a, uint64_t b);
-
+  uint64_t double_sub(uint64_t a, uint64_t b);
   /**
    * Get the result of multiplication between two double interpreted as 64 bit unsigned integer
    * This function will first reinterpret_cast both inputs to double (50 decimal digit precision), multiply them together, and reinterpret_cast the result back to 64 bit unsigned integer.

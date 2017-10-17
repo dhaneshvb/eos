@@ -253,6 +253,13 @@ DEFINE_INTRINSIC_FUNCTION2(env,double_add,double_add,i64,i64,a,i64,b) {
    return *reinterpret_cast<uint64_t *>(&res);
 }
 
+DEFINE_INTRINSIC_FUNCTION2(env,double_sub,double_sub,i64,i64,a,i64,b) {
+   DOUBLE c = DOUBLE(*reinterpret_cast<double *>(&a))
+            - DOUBLE(*reinterpret_cast<double *>(&b));
+   double res = c.convert_to<double>();
+   return *reinterpret_cast<uint64_t *>(&res);
+}
+
 DEFINE_INTRINSIC_FUNCTION2(env,double_mult,double_mult,i64,i64,a,i64,b) {
    DOUBLE c = DOUBLE(*reinterpret_cast<double *>(&a))
             * DOUBLE(*reinterpret_cast<double *>(&b));

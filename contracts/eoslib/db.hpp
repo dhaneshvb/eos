@@ -70,44 +70,44 @@ struct VarTable {
     public:
     typedef PrimaryType Primary;
 
-    int32_t store( Primary key, uint32_t keylen, char* record, uint32_t len ) {
-        return impl::store( scope, table, key, keylen, record, len );
+    static int32_t store( Primary key, uint32_t keylen, char* record, uint32_t len, uint64_t s = scope ) {
+        return impl::store( s, table, key, keylen, record, len );
     }
 
-    int32_t update( Primary key, uint32_t keylen, char* record, uint32_t len ) {
-        return impl::update( scope, table, key, keylen, record, len );
+    static int32_t update( Primary key, uint32_t keylen, char* record, uint32_t len, uint64_t s = scope ) {
+        return impl::update( s, table, key, keylen, record, len );
     }
    
-    int32_t front( char* record, uint32_t len ) {
-        return impl::front( scope, code, table, record, len ); 
+    static int32_t front( char* record, uint32_t len, uint64_t s = scope ) {
+        return impl::front( s, code, table, record, len ); 
     }
 
-    int32_t back( char* record, uint32_t len ) {
-        return impl::back( scope, code, table, record, len );
+    static int32_t back( char* record, uint32_t len, uint64_t s = scope ) {
+        return impl::back( s, code, table, record, len );
     }
 
-    int32_t load( Primary key, uint32_t keylen, char* record, uint32_t len ) {
-       return impl::load( scope, code, table, key, keylen, record, len );
+    static int32_t load( Primary key, uint32_t keylen, char* record, uint32_t len, uint64_t s = scope ) {
+       return impl::load( s, code, table, key, keylen, record, len );
     } 
 
-    int32_t next( Primary key, uint32_t keylen, char* record, uint32_t len ) {
-       return impl::next( scope, code, table, key, keylen, record, len );
+    static int32_t next( Primary key, uint32_t keylen, char* record, uint32_t len, uint64_t s = scope ) {
+       return impl::next( s, code, table, key, keylen, record, len );
     }
     
-    int32_t previous( Primary key, uint32_t keylen, char* record, uint32_t len ) {
-       return impl::previous( scope, code, table, key, keylen, record, len );
+    static int32_t previous( Primary key, uint32_t keylen, char* record, uint32_t len, uint64_t s = scope ) {
+       return impl::previous( s, code, table, key, keylen, record, len );
     }
 
-    int32_t lower_bound( Primary key, uint32_t keylen, char* record, uint32_t len ) {
-       return impl::lower_bound( scope, code, table, key, keylen, record, len );
+    static int32_t lower_bound( Primary key, uint32_t keylen, char* record, uint32_t len, uint64_t s = scope ) {
+       return impl::lower_bound( s, code, table, key, keylen, record, len );
     }
 
-    int32_t upper_bound( Primary key, uint32_t keylen, char* record, uint32_t len ) {
-       return impl::upper_bound( scope, code, table, key, keylen, record, len );
+    static int32_t upper_bound( Primary key, uint32_t keylen, char* record, uint32_t len, uint64_t s = scope ) {
+       return impl::upper_bound( s, code, table, key, keylen, record, len );
     }
 
-    int32_t remove( Primary key, uint32_t keylen ) {
-       return impl::remove( scope, table, key, keylen );
+    static int32_t remove( Primary key, uint32_t keylen, uint64_t s = scope ) {
+       return impl::remove( s, table, key, keylen );
     }
 };
 

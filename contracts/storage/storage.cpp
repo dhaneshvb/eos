@@ -3,127 +3,151 @@
  *  @copyright defined in eos/LICENSE.txt
  */
 #include "storage.hpp"
+#include "storage.gen.hpp"
+#include "bancor.hpp"
+#include <eoslib/print.hpp>
 
-namespace TOKEN_NAME {
-   void storeAccount( AccountName name, const Account& account ) {
-      if ( account.isEmpty() ) {
-         Accounts::remove( account, name );
+using namespace eos;
+
+namespace storage { 
+
+   void allocate_storage(const Transfer& transfer) {
+      // calculate storage to allocate for transfer
+      Capacity capacity;
+      CapacityTable::get(N(storage), capacity);
+      uint64_t percent_space = bancor::allocate(transfer.amount);
+      capacity.reserve = double_add(capacity.reserve, percent_space);
+      CapacityTable::store(capacity, N(storage));
+
+      // modify user allocation table
+      Allocation allocation;
+      AllocationTable::get(transfer.from, allocation, transfer.from);
+      print(allocation.totalPaid);
+      allocation.percentAllocated = double_add(allocation.percentAllocated, percent_space);
+      allocation.totalPaid += transfer.amount;
+      AllocationTable::store(allocation, transfer.from);
+   }
+
+   void deallocate_storage( const Transfer& transfer ) {
+      Capacity capacity;
+      CapacityTable::get(N(storage), capacity);
+      Allocation allocation;
+      AllocationTable::get(transfer.to, allocation, transfer.to);
+      assert(transfer.amount <= allocation.totalPaid, "allocated eos to storage less than transfer amount");
+      uint64_t average_price = double_div(allocation.percentAllocated, i64_to_double(allocation.totalPaid));
+      uint64_t percent_freed = double_mult(i64_to_double(transfer.amount), average_price);
+      capacity.reserve = double_sub(capacity.reserve, percent_freed);
+      allocation.totalPaid -= transfer.amount;
+      allocation.percentAllocated = double_sub(allocation.percentAllocated, percent_freed);
+      CapacityTable::store(capacity, N(storage));
+      AllocationTable::store(allocation, transfer.to);
+   }
+
+   void apply_storage_transfer( const Transfer& transfer ) {
+
+      if (transfer.from == N(storage) ) {
+          requireAuth( transfer.to );
+          deallocate_storage( transfer );
+      } else if (transfer.to == N(storage) ) {
+          requireAuth( transfer.from );
+          allocate_storage( transfer );
       } else {
-         Accounts::store(account, name );
-      } 
+          assert(0, "unknown transfer" );
+      }
    }
 
-   void apply_storage_transfer( const TOKEN_NAME::Transfer& transfer ) {
-      eos::requireNotice( transfer.to, transfer.from );
-      eos::requireAuth( transfer.from );
-
-      Account from = getAccount( transfer.from );
-      Account to   = getAccount( transfer.to );
-
-      from.balance -= transfer.quantity; /// token subtraction has underflow assertion
-      to.balance   += transfer.quantity; /// token addition has overflow assertion
-
-      storeAccount( transfer.from, from );
-      storeAccount( transfer.to, to );
-   }
-
-   bool validate_ipfspath( const char* ipfspath, uint32_t len ) {
+   bool validate_ipfspath( String ipfspath ) {
       // To be implemented
       return true;  
    }
 
-   bool validate_eospath( const char* eospath, uint32_t len ) {
+   bool validate_eospath( String eospath ) {
       // To be implemented
       return true;
    }
 
-   uint32_t readLinkFromBuffer( const char* buffer, uint32_t bufferlen, 
-                                TOKEN_NAME::Link& link, uint32_t& eospathlen, uint32_t ipfspathlen ) {
-      // To be implemented
-      return 0;
-   }
- 
-   void apply_storage_setlink() {
-      TOKEN_NAME::Link link;
-      uint32_t eospathlen;
-      uint32_t ipfspathlen;
-      char tmp[4098];
-      auto bufferlen = readMessage(tmp, 4098);
-      auto linklen = readLinkFromBuffer( tmp, bufferlen, link, eospathlen, ipfspathlen );
-      eos::requireNotice( link.owner );
-      eos::requireAuth( link.owner );
-      validate_ipfspath( link.ipfspath, ipfspathlen );
-      validate_eospath( link.eospath, eospathlen );
-      ::store_str( currentCode(), N(storage), link.eospath, eospathlen, (char*)&link, linklen );
-   }
-   
-   void apply_storage_removelink( char* eospath, uint32_t eospathlen ) {
-      char tmp[4098];
-      auto len = ::load_str( currentCode(), currentCode(), N(storage), eospath, eospathlen, tmp, 4098 );
-      TOKEN_NAME::Link link;
-      uint32_t ipfspathlen;
-      len = readLinkFromBuffer( tmp, len, link, eospathlen, ipfspathlen );
-      eos::requireAuth( link.owner );
-      uint32_t stake = link.stake;
-      ::remove_str( currentCode(), N(storage), link.eospath, eospathlen );
-      // Reduce Quota usage in Account table
-      // How does producer know to free cached file?
-   }
-   
-   void apply_storage_createstore( char* eospath, uint32_t eospathlen ) {
-      char tmp[4098];
-      auto len = ::load_str( currentCode(), currentCode(), N(storage), eospath, eospathlen, tmp, 4098 );
-      TOKEN_NAME::Link link;
-      uint32_t ipfspathlen;
-      len = readLinkFromBuffer( tmp, len, link, eospathlen, ipfspathlen );
+   void apply_storage_setlink(const Link& link) {
+      requireAuth( link.owner );
+      validate_ipfspath( link.ipfspath );
+      validate_eospath( link.eospath );
+      Bytes linkBytes = valueToBytes<Link>(link);
+      Bytes eospathBytes = valueToBytes<String>(link.eospath);
+      Capacity capacity;
+      CapacityTable::get(N(storage), capacity);
+      Allocation allocation;
+      AllocationTable::get(link.owner, allocation, link.owner);
+      uint64_t totalBytes = double_mult(i64_to_double(capacity.supply), allocation.percentAllocated);
+      uint64_t availableBytes = double_sub(totalBytes, i64_to_double(allocation.usedBytes));
       
-      // eos::requireAuth( producer )
-      // How do we validate the requireAuth() is a producer?
-      // logic goes here to reduce number of tokens and increase quote used using bancor algorithm
-      link.accept = 1;
-      ::store_str( currentCode(), N(storage), link.eospath, eospathlen, (char*)&link, len );
+      if (link.requestHosting > 0) {
+          assert(link.size <= availableBytes, "insufficient space to store file");
+      }
+      LinkTable::store((char*)eospathBytes.data, eospathBytes.len, (char*)linkBytes.data, linkBytes.len);
    }
    
-   void apply_storage_rejectstore( char* eospath, uint32_t eospathlen ) {
-      char tmp[4098];
-      auto len = ::load_str( currentCode(), currentCode(), N(storage), eospath, eospathlen, tmp, 4098 );
-      TOKEN_NAME::Link link;
-      uint32_t ipfspathlen;
-      len = readLinkFromBuffer( tmp, len, link, eospathlen, ipfspathlen );
-      // eos::requireAuth( producer )
-      // How do we validate the requireAuth() is a producer?
-      link.accept = 0;
-      ::store_str( currentCode(), N(storage), link.eospath, eospathlen, (char*)&link, len );
+   void apply_storage_removelink( const RemoveLink& removelink ) {
+      requireAuth( removelink.owner );
+      validate_eospath( removelink.eospath ); 
+      Bytes eospathBytes = valueToBytes<String>(removelink.eospath);
+      
+      char* buffer = (char*)eos::malloc(4098);
+      auto len = LinkTable::load((char*)eospathBytes.data, eospathBytes.len, buffer, 4098, removelink.owner);
+      assert(len > 0, "file not found");
+      Bytes bytes;
+      bytes.len = len;
+      bytes.data = (uint8_t*)buffer;
+      Link link = bytesToValue<Link>(bytes);
+      
+      if (!removelink.keep_link) {
+         auto len = LinkTable::remove((char*)eospathBytes.data, eospathBytes.len, removelink.owner);
+         assert(len > 0, "eos file path not found");
+      } else {
+         link.accepted = 0;
+         LinkTable::update((char*)eospathBytes.data, eospathBytes.len, buffer, len, removelink.owner);
+      }
+     
+      if (link.requestHosting > 0) { 
+      	  Allocation allocation;
+          AllocationTable::get(removelink.owner, allocation, removelink.owner);
+          allocation.usedBytes -= link.size;
+          AllocationTable::store(allocation, removelink.owner);
+      }
+      eos::free(buffer);
    }
-}  // namespace TOKEN_NAME
+   
+   void apply_storage_acceptstore( const Store& store ) {
+   }
+   
+   void apply_storage_rejectstore( const Reject& reject ) {
+   }
+}  // namespace storage
 
-using namespace TOKEN_NAME;
+using namespace storage;
 
 extern "C" {
     void init()  {
-       // How do we initialize the storage capacity? By how much here?
-       Accounts::store( Account( StorageTokens(1000ll*1000ll*1000ll) ), N(storage) );
+       Capacity capacity { N(storage), 1024ll*1024ll*1024ll*1024ll*1024ll, 0 };
+       CapacityTable::store(capacity, N(storage));
     }
 
     /// The apply method implements the dispatch of events to this contract
     void apply( uint64_t code, uint64_t action ) {
-       if( code == N(storage) ) {
+       if( code == N(eos) ) {
           if( action == N(transfer) ) {
-               TOKEN_NAME::apply_storage_transfer( eos::currentMessage< TOKEN_NAME::Transfer >() );
-          } else if (action == N(setlink) ) {
-               TOKEN_NAME::apply_storage_setlink(); 
+              storage::apply_storage_transfer(eos::currentMessage<Transfer>());
+          } 
+          else {
+               assert(0, "unknown message");
+          } 
+       } else if ( code == N(storage) ) {
+          if (action == N(setlink) ) {
+               storage::apply_storage_setlink(eos::currentMessage<Link>());
           } else if (action == N(removelink) ) {
-               char tmp[1025];
-               auto len = readMessage( tmp, 1025 );
-               TOKEN_NAME::apply_storage_removelink( tmp, len );
+               storage::apply_storage_removelink(eos::currentMessage<RemoveLink>());
           } else if (action == N(acceptstore) ) {
-               char tmp[1025];
-               auto len = readMessage( tmp, 1025 );
-               TOKEN_NAME::apply_storage_createstore( tmp, len );
+               storage::apply_storage_acceptstore(eos::currentMessage<Store>());
           } else if (action == N(rejectstore) ) {
-               char tmp[1025];
-               auto len = readMessage( tmp, 1025 );
-               TOKEN_NAME::apply_storage_rejectstore( tmp, len );
+               storage::apply_storage_rejectstore(eos::currentMessage<Reject>());
           } else {
                assert(0, "unknown message");
           }

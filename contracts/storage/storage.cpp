@@ -6,6 +6,7 @@
 #include "storage.gen.hpp"
 #include "bancor.hpp"
 #include <eoslib/print.hpp>
+#include <eoslib/chain.h>
 
 using namespace eos;
 
@@ -116,6 +117,43 @@ namespace storage {
    }
    
    void apply_storage_acceptstore( const Store& store ) {
+     AccountName producers[21];
+     getActiveProducers(producers, sizeof(AccountName)*21);
+
+     for( int ii=0; ii < 21; ++ii) {
+        if (store.producer == producers[ii]) {
+            requireAuth( store.producer );
+            validate_eospath( store.eospath );
+            Bytes eospathBytes = valueToBytes<String>(store.eospath);
+
+            char* buffer = (char*)eos::malloc(4098);
+            auto len = LinkTable::load((char*)eospathBytes.data, eospathBytes.len, buffer, 4098, store.owner);
+            assert(len > 0, "file not found");
+            Bytes bytes;
+            bytes.len = len;
+            bytes.data = (uint8_t*)buffer;
+            Link link = bytesToValue<Link>(bytes);
+            assert(link.accepted == 0, "file already accepted by producer");
+            assert(link.requestHosting > 0, "file was not requested for hosting");
+            assert(link.owner == store.owner, "file not owned by owner");
+            link.accepted = 1;
+            link.producer = store.producer;
+            Allocation allocation;
+            AllocationTable::get(link.owner, allocation, link.owner);
+            Capacity capacity;
+            CapacityTable::get(N(storage), capacity);
+            uint64_t totalBytes = double_mult(i64_to_double(capacity.supply), allocation.percentAllocated);
+            uint64_t availableBytes = double_sub(totalBytes, i64_to_double(allocation.usedBytes));
+            assert(link.size <= availableBytes, "insufficient space to store file");
+            allocation.usedBytes += link.size;
+            AllocationTable::store(allocation, link.owner);
+            LinkTable::update((char*)eospathBytes.data, eospathBytes.len, buffer, len, link.owner);
+            // TODO: remove any reject stores for this producer
+            return;
+        }
+     }
+
+     assert(0, "not a producer; only active producer can accept storage");
    }
    
    void apply_storage_rejectstore( const Reject& reject ) {
